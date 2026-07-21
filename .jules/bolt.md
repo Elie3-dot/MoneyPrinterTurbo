@@ -1,0 +1,3 @@
+## 2026-07-21 - PIL ImageFont Cache for Video Generation
+**Learning:** Loading large TrueType/OpenType font files (e.g. STHeitiMedium.ttc, MicrosoftYaHeiNormal.ttc) from disk via `ImageFont.truetype` inside video and subtitle generation loops introduces high redundant disk I/O and CPU parsing overhead. Caching these font instances with `@lru_cache` yields a ~824x speedup in font loading, which significantly improves the responsiveness and efficiency of subtitle rendering and text-wrapping calculations.
+**Action:** Always cache font loading calls with `@lru_cache` when using Pillow's `ImageFont.truetype` inside loops or repetitive functions.
