@@ -1,0 +1,3 @@
+## 2026-07-25 - Caching PIL Font Loading in Subtitle Loops
+**Learning:** In video rendering, subtitles are parsed and generated frame-by-frame or chunk-by-chunk. Inside subtitle generation loops, `ImageFont.truetype` is often called repeatedly to load large CJK font files (like STHeiti, Microsoft YaHei, up to 54MB) from disk. Loading and parsing these fonts on every subtitle line introduces massive, redundant disk I/O and CPU overhead.
+**Action:** Wrap the font loading with `@lru_cache` using a dedicated helper function (e.g. `_get_cached_font`) to cache `ImageFont.truetype` instances across subtitle chunks.
