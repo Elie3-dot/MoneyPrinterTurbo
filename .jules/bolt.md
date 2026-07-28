@@ -1,0 +1,3 @@
+## 2026-07-28 - Pillow (PIL) font loading optimization
+**Learning:** In video/subtitle generation loops, Pillow (PIL) `ImageFont.truetype` is invoked repeatedly (e.g., in `wrap_text` and `create_text_clip`) for every single subtitle chunk. Loading the same TTF/TTC file from disk and parsing it over and over again is extremely slow and expensive, especially for large CJK fonts that can be tens of megabytes in size. Caching the loaded `ImageFont.truetype` instances using `@lru_cache(maxsize=128)` prevents redundant disk I/O and parsing overhead.
+**Action:** Always use a helper cached with `@lru_cache` to load fonts in repetitive subtitle generation/rendering paths.
