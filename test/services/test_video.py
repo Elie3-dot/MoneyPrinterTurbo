@@ -598,6 +598,32 @@ class TestVideoService(unittest.TestCase):
         except Exception as e:
             self.fail(f"test wrap_text failed: {str(e)}")
 
+    def test_get_cached_font(self):
+        """test that _get_cached_font correctly caches and returns the same font instances"""
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        # Clear cache first to start with a clean state
+        vd._get_cached_font.cache_clear()
+
+        # Call first time
+        font1 = vd._get_cached_font(font_path, 30)
+        # Call second time with the same parameters
+        font2 = vd._get_cached_font(font_path, 30)
+
+        # Assert they are the exact same instance (cached)
+        self.assertIs(font1, font2)
+
+        # Call with different font size
+        font3 = vd._get_cached_font(font_path, 32)
+        self.assertIsNot(font1, font3)
+
+        # Clear cache and assert a new call returns a new instance
+        vd._get_cached_font.cache_clear()
+        font4 = vd._get_cached_font(font_path, 30)
+        self.assertIsNot(font1, font4)
+
     def test_rounded_subtitle_background_clip_has_transparent_corners(self):
         """
         圆角字幕背景只在用户显式开启时使用。这里直接验证生成的 RGBA
