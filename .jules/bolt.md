@@ -1,0 +1,3 @@
+## 2025-02-14 - Cache PIL Font Loading inside Video and Subtitle Generation Loops
+**Learning:** Loading and parsing TrueType/OpenType font files (.ttf, .ttc) repeatedly using `ImageFont.truetype` inside subtitle and text wrapping loops is CPU and I/O intensive. Subtitle generation often involves hundreds of subtitle phrases where the same font and size are used repeatedly. Caching these font instances eliminates redundant disk reads and parsing overhead, significantly speeding up rendering.
+**Action:** Implement `_get_cached_font` with `@lru_cache(maxsize=128)` and use it to load fonts dynamically in `app/services/video.py`.
