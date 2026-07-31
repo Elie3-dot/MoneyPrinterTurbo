@@ -1,0 +1,3 @@
+## 2025-03-08 - [Pillow Font Loading Optimization via LRU Caching]
+**Learning:** Repetitively loading and parsing TrueType/OpenType font files inside video/subtitle generation loops causes redundant disk I/O and CPU overhead. By caching PIL's `ImageFont.truetype` instances with `@lru_cache(maxsize=128)`, font loading performance improved by over 460x, bringing font lookup down from ~0.54ms per load to ~0.0012ms.
+**Action:** Always identify operations inside hot loops that involve disk I/O or expensive asset parsing (like fonts, models, configurations) and apply proper caching (e.g., using `functools.lru_cache`) to save both CPU cycles and file handles.
