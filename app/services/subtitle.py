@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import os.path
 import re
@@ -171,24 +172,28 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
+@lru_cache(maxsize=2048)
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Compute the Levenshtein edit distance between two strings s1 and s2.
+    Optimized using a 2-row DP matrix and @lru_cache for faster lookups.
+    """
     if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
     if len(s2) == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
+    r0 = list(range(len(s2) + 1))
+    r1 = [0] * (len(s2) + 1)
     for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+        r1[0] = i + 1
         for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            sub = r0[j] if c1 == c2 else r0[j] + 1
+            r1[j + 1] = min(r0[j + 1] + 1, r1[j] + 1, sub)
+        r0, r1 = r1, r0
 
-    return previous_row[-1]
+    return r0[-1]
 
 
 def similarity(a, b):
