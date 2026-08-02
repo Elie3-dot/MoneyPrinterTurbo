@@ -634,6 +634,32 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font_caches_instances(self):
+        """Verify that _get_cached_font returns cached instances and handles unhashable arguments gracefully."""
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        font1 = vd._get_cached_font(font_path, 30)
+        font2 = vd._get_cached_font(font_path, 30)
+        # Check that it returns the exact same cached object
+        self.assertIs(font1, font2)
+
+        # Check different size gets different object
+        font3 = vd._get_cached_font(font_path, 40)
+        self.assertIsNot(font1, font3)
+
+        # Check defensive fallback for unhashable arguments
+        # Under Python / PIL ImageFont, if path is passed as a file-like object or stream, or any non-string,
+        # our function should defensively bypass caching and not crash on unhashable type.
+        unhashable_arg = {"unhashable": font_path}
+        # To avoid PIL failing on dict, we can mock or patch ImageFont.truetype
+        with patch("PIL.ImageFont.truetype") as mock_truetype:
+            mock_truetype.return_value = "fake-font"
+            font_unhashable = vd._get_cached_font(unhashable_arg, 30)
+            self.assertEqual(font_unhashable, "fake-font")
+            mock_truetype.assert_called_once_with(unhashable_arg, 30)
+
 
 if __name__ == "__main__":
     unittest.main()
