@@ -87,6 +87,25 @@ class TestSubtitleService(unittest.TestCase):
 
         self.assertEqual([item[2] for item in items], ["Hello", "World"])
 
+    def test_levenshtein_distance_correctness(self):
+        """Verify the correctness of the optimized levenshtein_distance implementation."""
+        # Empty string cases
+        self.assertEqual(subtitle.levenshtein_distance("", ""), 0)
+        self.assertEqual(subtitle.levenshtein_distance("a", ""), 1)
+        self.assertEqual(subtitle.levenshtein_distance("", "a"), 1)
+
+        # Identity
+        self.assertEqual(subtitle.levenshtein_distance("hello", "hello"), 0)
+
+        # Substitutions
+        self.assertEqual(subtitle.levenshtein_distance("hello", "hella"), 1)
+        self.assertEqual(subtitle.levenshtein_distance("kitten", "sitting"), 3)
+
+        # Deletions and Insertions
+        self.assertEqual(subtitle.levenshtein_distance("abc", "ab"), 1)
+        self.assertEqual(subtitle.levenshtein_distance("ab", "abc"), 1)
+        self.assertEqual(subtitle.levenshtein_distance("rosettacode", "raisethysword"), 8)
+
 
 if __name__ == "__main__":
     unittest.main()
