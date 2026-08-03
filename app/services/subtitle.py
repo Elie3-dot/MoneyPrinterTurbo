@@ -1,6 +1,7 @@
 import json
 import os.path
 import re
+from functools import lru_cache
 from timeit import default_timer as timer
 
 try:
@@ -171,22 +172,29 @@ def file_to_subtitles(filename):
     return times_texts
 
 
+@lru_cache(maxsize=2048)
 def levenshtein_distance(s1, s2):
+    """
+    Computes the Levenshtein distance between two strings.
+    Optimized with lru_cache and flat 2-row buffer swapping to reduce allocation overhead.
+    """
     if len(s1) < len(s2):
         return levenshtein_distance(s2, s1)
 
     if len(s2) == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
+    # Reuses flat arrays to avoid list.append overhead during iteration.
+    previous_row = list(range(len(s2) + 1))
+    current_row = [0] * (len(s2) + 1)
     for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+        current_row[0] = i + 1
         for j, c2 in enumerate(s2):
             insertions = previous_row[j + 1] + 1
             deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            current_row[j + 1] = min(insertions, deletions, substitutions)
+        previous_row, current_row = current_row, previous_row
 
     return previous_row[-1]
 
