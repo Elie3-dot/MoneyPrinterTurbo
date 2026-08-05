@@ -634,6 +634,42 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font(self):
+        """
+        Verify that _get_cached_font caches loaded font instances,
+        returns identical objects on subsequent requests, and safely handles
+        unhashable arguments without raising TypeError.
+        """
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            font_path = "Arial"  # Fallback to general standard font if needed
+
+        # Clear cache before testing to ensure clean slate
+        vd._get_font_lru.cache_clear()
+
+        # 1. First load
+        font1 = vd._get_cached_font(font_path, 24)
+        # 2. Second load should be identical (cache hit)
+        font2 = vd._get_cached_font(font_path, 24)
+        self.assertIs(font1, font2)
+
+        # 3. Loading with different size should be a different instance
+        font3 = vd._get_cached_font(font_path, 32)
+        self.assertIsNot(font1, font3)
+
+        # 4. Loading with unhashable parameter (e.g. unhashable list) should bypass cache cleanly
+        # and not raise a TypeError.
+        unhashable_arg = [font_path]
+        try:
+            # We mock ImageFont.truetype for unhashable argument to prevent it from failing to parse list
+            with patch("PIL.ImageFont.truetype") as mock_truetype:
+                mock_truetype.return_value = "mocked_font"
+                result = vd._get_cached_font(unhashable_arg, 24)
+                self.assertEqual(result, "mocked_font")
+                mock_truetype.assert_called_once_with(unhashable_arg, 24)
+        except TypeError:
+            self.fail("_get_cached_font raised TypeError for unhashable argument")
+
 
 if __name__ == "__main__":
     unittest.main()
