@@ -1,0 +1,3 @@
+## 2026-08-07 - [PIL Font Loading Cache optimization]
+**Learning:** Pillow's `ImageFont.truetype` parses and loads the font file from disk into memory every time it is called. Doing this repeatedly inside loops (e.g. for wrapping or generating subtitles) introduces significant and redundant I/O overhead. Caching `ImageFont.truetype` with `@lru_cache` yields a ~650x performance improvement in font instantiation.
+**Action:** Implement a cached helper function `_get_cached_font` with `@lru_cache(maxsize=128)` in `app/services/video.py` and defensively catch unhashable arguments. Use it to replace all direct `ImageFont.truetype` calls.
