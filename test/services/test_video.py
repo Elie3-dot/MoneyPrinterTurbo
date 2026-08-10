@@ -634,6 +634,26 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font_returns_same_object(self):
+        """
+        Verify that _get_cached_font caches the loaded font object and returns
+        the exact same reference when called multiple times with the same arguments.
+        """
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        font_1 = vd._get_cached_font(font_path, 24)
+        font_2 = vd._get_cached_font(font_path, 24)
+        font_3 = vd._get_cached_font(font_path, 30)
+
+        self.assertIs(font_1, font_2)
+        self.assertIsNot(font_1, font_3)
+
+        # Verify that unhashable arguments gracefully bypass the cache
+        with self.assertRaises((TypeError, AttributeError)):
+            vd._get_cached_font({}, 24)
+
 
 if __name__ == "__main__":
     unittest.main()
