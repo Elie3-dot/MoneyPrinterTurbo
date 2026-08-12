@@ -1,6 +1,7 @@
 import json
 import os.path
 import re
+from functools import lru_cache
 from timeit import default_timer as timer
 
 try:
@@ -171,30 +172,53 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+@lru_cache(maxsize=1024)
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Computes the Levenshtein distance between two strings s1 and s2.
 
-    if len(s2) == 0:
+    Optimizations implemented:
+    - LRU Cache: Since similarity/distance is calculated on identical or highly repetitive
+      chunks of text in subtitle matching loops, caching saves redundant calculations.
+    - Swapping s1 and s2 so s2 is always the shorter string, which reduces memory allocation
+      and loop iterations of the inner loop.
+    - Pre-allocated flat lists to avoid dynamic list append overhead in the inner loop.
+    - Row swapping (reusing two rows instead of allocating new ones on each character of s1).
+    """
+    if len(s1) < len(s2):
+        s1, s2 = s2, s1
+
+    len_s2 = len(s2)
+    if len_s2 == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+    # Pre-allocate previous_row and current_row to avoid reallocation overhead.
+    previous_row = list(range(len_s2 + 1))
+    current_row = [0] * (len_s2 + 1)
+
+    for c1 in s1:
+        current_row[0] = previous_row[0] + 1
         for j, c2 in enumerate(s2):
             insertions = previous_row[j + 1] + 1
             deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            current_row[j + 1] = min(insertions, deletions, substitutions)
+        # Reuse allocated rows by swapping references.
+        previous_row, current_row = current_row, previous_row
 
     return previous_row[-1]
 
 
-def similarity(a, b):
+def similarity(a: str, b: str) -> float:
+    """
+    Returns the similarity ratio between two strings a and b.
+    Calculates levenshtein_distance of lowercase representations.
+    """
+    if not a and not b:
+        return 1.0
     distance = levenshtein_distance(a.lower(), b.lower())
     max_length = max(len(a), len(b))
-    return 1 - (distance / max_length)
+    return 1.0 - (distance / max_length)
 
 
 def correct(subtitle_file, video_script):

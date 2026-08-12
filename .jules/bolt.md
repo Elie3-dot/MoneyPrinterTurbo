@@ -1,0 +1,3 @@
+## 2026-08-12 - [Levenshtein Distance Optimization]
+**Learning:** During subtitle correction/alignment processes, the Levenshtein distance algorithm is repetitively called to find string similarity. The default implementation has massive memory allocations (appending to lists inside a double loop) and redundant recursive calls.
+**Action:** Swap strings to minimize the inner loop size, pre-allocate flat arrays, reuse row memory by swapping row references, and use `@lru_cache(maxsize=1024)` to entirely avoid computing distance for identical comparison chunks. Also added edge case handling to prevent division by zero in the similarity function.
