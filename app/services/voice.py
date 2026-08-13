@@ -1409,18 +1409,32 @@ def _get_audio_duration_from_submaker(sub_maker: SubMaker):
 
 def _get_audio_duration_from_mp3(mp3_file: str) -> float:
     """
-    获取MP3音频时长
+    获取MP3音频时长，使用轻量级 ffmpeg 探测，避免 MoviePy 完整解析的性能开销
     """
     if not os.path.exists(mp3_file):
         logger.error(f"MP3 file does not exist: {mp3_file}")
         return 0.0
 
     try:
-        # Use moviepy to get the duration of the MP3 file
-        with AudioFileClip(mp3_file) as audio:
-            return audio.duration  # Duration in seconds
+        ffmpeg_bin = utils.get_ffmpeg_binary()
+        cmd = [ffmpeg_bin, "-i", mp3_file]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        # 匹配 Duration: 00:00:10.50 格式
+        match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", res.stderr)
+        if match:
+            hours = int(match.group(1))
+            minutes = int(match.group(2))
+            seconds = float(match.group(3))
+            return hours * 3600 + minutes * 60 + seconds
     except Exception as e:
-        logger.error(f"Failed to get audio duration from MP3: {str(e)}")
+        logger.error(f"Failed to get audio duration from MP3 via ffmpeg: {str(e)}")
+
+    # 兜底方案：万一 ffmpeg 解析失败，回退到原 moviepy 实现
+    try:
+        with AudioFileClip(mp3_file) as audio:
+            return audio.duration
+    except Exception as e:
+        logger.error(f"Failed to get audio duration from MP3 via fallback MoviePy: {str(e)}")
         return 0.0
 
 def get_audio_duration(target: Union[str, SubMaker]) -> float:
