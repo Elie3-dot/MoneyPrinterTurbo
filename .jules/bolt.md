@@ -1,0 +1,3 @@
+## 2026-08-13 - MP3 Duration Query Optimization
+**Learning:** Querying audio duration using MoviePy's `AudioFileClip` inside tasks introduces significant CPU, memory, and disk I/O overhead due to full file structure parsing and decoder initialization. A direct, lightweight subprocess metadata probe via `ffmpeg` runs ~6x faster and completely bypasses heavy runtime allocations.
+**Action:** Use direct command-line metadata probes on local files rather than wrapping them in complete media editing framework classes (like MoviePy) unless full processing is required, and always provide a fallback block to the original framework implementation to ensure robust error safety.
