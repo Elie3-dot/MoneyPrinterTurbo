@@ -88,5 +88,30 @@ class TestSubtitleService(unittest.TestCase):
         self.assertEqual([item[2] for item in items], ["Hello", "World"])
 
 
+class TestPunctuationUtils(unittest.TestCase):
+    def test_str_contains_punctuation(self):
+        from app.utils.utils import str_contains_punctuation
+
+        self.assertTrue(str_contains_punctuation("hello,"))
+        self.assertTrue(str_contains_punctuation("你好！"))
+        self.assertTrue(str_contains_punctuation("مرحبا؟"))
+        self.assertFalse(str_contains_punctuation("hello world"))
+        self.assertFalse(str_contains_punctuation("123456"))
+
+    def test_split_string_by_punctuations(self):
+        from app.utils.utils import split_string_by_punctuations
+
+        text = "Hello, world! This costs $2.5 for 1,000 items.\nNew line here; test."
+        result = split_string_by_punctuations(text)
+        expected = [
+            "Hello",
+            "world",
+            "This costs $2.5 for 1,000 items",
+            "New line here",
+            "test",
+        ]
+        self.assertEqual(result, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

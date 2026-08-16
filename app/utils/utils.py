@@ -13,6 +13,9 @@ from loguru import logger
 
 from app.models import const
 
+# Pre-computed set of punctuation characters for O(1) set membership and disjoint checks
+PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
 
 def get_response(status: int, data: Any = None, message: str = ""):
     obj = {
@@ -195,33 +198,34 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
 
 
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Optimization: Checking set disjointness is O(N) in word length rather than O(N * P) linear scans
+    return not PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
     result = []
-    txt = ""
+    txt = []
 
     previous_char = ""
     next_char = ""
-    for i in range(len(s)):
+    n = len(s)
+    for i in range(n):
         char = s[i]
         if char == "\n":
-            result.append(txt.strip())
-            txt = ""
+            sub = "".join(txt).strip()
+            if sub:
+                result.append(sub)
+            txt = []
             continue
 
         if i > 0:
             previous_char = s[i - 1]
-        if i < len(s) - 1:
+        if i < n - 1:
             next_char = s[i + 1]
 
         if char == "." and previous_char.isdigit() and next_char.isdigit():
-            # # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
-            txt += char
+            # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
+            txt.append(char)
             continue
 
         if char == "," and previous_char.isdigit() and next_char.isdigit():
@@ -229,17 +233,19 @@ def split_string_by_punctuations(s):
             # Edge TTS 的 word boundary 通常会把这种数字整体作为连续内容返回；
             # 如果这里拆成 "1" 和 "000 years"，后续字幕聚合会无法匹配脚本原文，
             # 进而错误回退到 Whisper。
-            txt += char
+            txt.append(char)
             continue
 
-        if char not in const.PUNCTUATIONS:
-            txt += char
+        if char not in PUNCTUATION_SET:
+            txt.append(char)
         else:
-            result.append(txt.strip())
-            txt = ""
-    result.append(txt.strip())
-    # filter empty string
-    result = list(filter(None, result))
+            sub = "".join(txt).strip()
+            if sub:
+                result.append(sub)
+            txt = []
+    sub = "".join(txt).strip()
+    if sub:
+        result.append(sub)
     return result
 
 
