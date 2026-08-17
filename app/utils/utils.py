@@ -194,52 +194,51 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
     return srt
 
 
+# Pre-computed set of punctuation characters for O(1) set membership lookups
+PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
+
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Performance Optimization: O(1) disjoint set membership check instead of O(N) list scanning
+    return not PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
+    # Performance Optimization: List buffer accumulator `txt` instead of repeated string concatenation,
+    # along with O(1) punctuation set lookup and reduced loop slicing overhead.
     result = []
-    txt = ""
+    txt = []
+    n = len(s)
 
-    previous_char = ""
-    next_char = ""
-    for i in range(len(s)):
-        char = s[i]
+    for i, char in enumerate(s):
         if char == "\n":
-            result.append(txt.strip())
-            txt = ""
+            if txt:
+                t = "".join(txt).strip()
+                if t:
+                    result.append(t)
+                txt = []
             continue
 
-        if i > 0:
-            previous_char = s[i - 1]
-        if i < len(s) - 1:
-            next_char = s[i + 1]
+        if char in (".", ","):
+            # In "2.5" or "1,000", decimal points and thousands separators are not sentence breaks
+            if 0 < i < n - 1 and s[i - 1].isdigit() and s[i + 1].isdigit():
+                txt.append(char)
+                continue
 
-        if char == "." and previous_char.isdigit() and next_char.isdigit():
-            # # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
-            txt += char
-            continue
-
-        if char == "," and previous_char.isdigit() and next_char.isdigit():
-            # 英文数字里的千分位逗号不是断句符，例如 "1,000 years"。
-            # Edge TTS 的 word boundary 通常会把这种数字整体作为连续内容返回；
-            # 如果这里拆成 "1" 和 "000 years"，后续字幕聚合会无法匹配脚本原文，
-            # 进而错误回退到 Whisper。
-            txt += char
-            continue
-
-        if char not in const.PUNCTUATIONS:
-            txt += char
+        if char not in PUNCTUATION_SET:
+            txt.append(char)
         else:
-            result.append(txt.strip())
-            txt = ""
-    result.append(txt.strip())
-    # filter empty string
-    result = list(filter(None, result))
+            if txt:
+                t = "".join(txt).strip()
+                if t:
+                    result.append(t)
+                txt = []
+
+    if txt:
+        t = "".join(txt).strip()
+        if t:
+            result.append(t)
+
     return result
 
 
