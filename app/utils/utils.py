@@ -194,11 +194,13 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
     return srt
 
 
+# Pre-computed set of punctuation characters for O(1) membership check
+PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
+
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Use set disjoint check for O(1) character lookup
+    return not PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
@@ -232,7 +234,7 @@ def split_string_by_punctuations(s):
             txt += char
             continue
 
-        if char not in const.PUNCTUATIONS:
+        if char not in PUNCTUATION_SET:
             txt += char
         else:
             result.append(txt.strip())
