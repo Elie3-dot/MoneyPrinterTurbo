@@ -12,6 +12,7 @@ import threading
 import time
 import unicodedata
 from datetime import datetime
+from functools import lru_cache
 from typing import Union
 from xml.sax.saxutils import unescape
 
@@ -153,21 +154,34 @@ def _load_azure_voices() -> list[dict]:
     return _azure_voices_cache
 
 
-def get_all_azure_voices(filter_locals=None) -> list[str]:
+@lru_cache(maxsize=128)
+def _get_all_azure_voices_cached(filter_locals_tuple: tuple[str, ...] | None = None) -> list[str]:
+    # Memoized implementation for get_all_azure_voices to avoid parsing JSON list,
+    # string formatting, and sorting on every Streamlit rerun and API call.
     voices = []
-    for item in _load_azure_voices():
-        name = item["name"]
-        gender = item["gender"]
-        # 应用过滤条件
-        if filter_locals and any(
-            name.lower().startswith(fl.lower()) for fl in filter_locals
-        ):
-            voices.append(f"{name}-{gender}")
-        elif not filter_locals:
-            voices.append(f"{name}-{gender}")
+    if filter_locals_tuple:
+        filter_locals_lower = [fl.lower() for fl in filter_locals_tuple]
+        for item in _load_azure_voices():
+            name = item["name"]
+            name_lower = name.lower()
+            if any(name_lower.startswith(fl) for fl in filter_locals_lower):
+                voices.append(f"{name}-{item['gender']}")
+    else:
+        for item in _load_azure_voices():
+            voices.append(f"{item['name']}-{item['gender']}")
 
     voices.sort()
     return voices
+
+
+def get_all_azure_voices(filter_locals=None) -> list[str]:
+    # Cache lookup using hashable tuple representation of filter_locals.
+    # Returns a shallow copy to prevent callers from mutating the cached list.
+    if filter_locals:
+        filter_locals_tuple = tuple(filter_locals)
+    else:
+        filter_locals_tuple = None
+    return list(_get_all_azure_voices_cached(filter_locals_tuple))
 
 
 def parse_voice_name(name: str):
