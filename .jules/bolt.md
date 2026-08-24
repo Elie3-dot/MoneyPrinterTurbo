@@ -1,0 +1,4 @@
+## 2025-05-15 - Set membership for punctuation scanning and list buffering for sentence splitting
+
+**Learning:** In MoneyPrinterTurbo's text processing pipelines, `const.PUNCTUATIONS` was checked using linear scans (`in` over a list) per character and repeatedly concatenated strings inside tight loops during text splitting. Pre-building a set of all punctuation characters (`PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))`) enables O(1) set membership (`not PUNCTUATION_SET.isdisjoint(word)` and `char not in PUNCTUATION_SET`), and collecting characters in a list before calling `"".join(txt_chars)` avoids O(N^2) string allocation overhead.
+**Action:** When working on text analysis or sentence splitting utilities, always pre-compute punctuation sets and use list buffers to aggregate character tokens rather than repeatedly appending strings or linearly searching lists.
