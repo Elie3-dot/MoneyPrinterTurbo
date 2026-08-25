@@ -109,6 +109,25 @@ class TestVoiceService(unittest.TestCase):
         self.assertTrue(vs.is_no_voice(vs.NO_VOICE_NAME))
         self.assertFalse(vs.is_no_voice(""))
 
+    def test_estimate_no_voice_duration_various_texts(self):
+        """
+        测试 estimate_no_voice_duration 针对空文本、中文、英文以及混合文本的时长估算。
+        """
+        self.assertEqual(vs.estimate_no_voice_duration(""), 3.0)
+        self.assertEqual(vs.estimate_no_voice_duration("   "), 3.0)
+
+        # Chinese test
+        zh_text = "静夜思是唐代诗人李白创作的一首五言古诗。"
+        # 19 CJK chars / 4.2 = 4.52s, 1 sentence -> pause 0 -> total ~4.52s
+        zh_dur = vs.estimate_no_voice_duration(zh_text)
+        self.assertAlmostEqual(zh_dur, 19 / 4.2, places=2)
+
+        # English test
+        en_text = "Hello world! This is a test."
+        # words: 6, ascii_word_chars: 20 -> 6/2.7 = 2.22s, 2 sentences -> pause 0.35s -> total ~2.57s -> min 3.0s
+        en_dur = vs.estimate_no_voice_duration(en_text)
+        self.assertGreaterEqual(en_dur, 3.0)
+
     def test_no_voice_duration_estimates_non_ascii_languages(self):
         """
         无配音没有真实 TTS 音频，只能根据脚本文字估算阅读时间。俄语、阿拉伯语、

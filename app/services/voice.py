@@ -35,6 +35,10 @@ NO_VOICE_NAME = "no-voice"
 # 更明确的 `no-voice`。
 _NO_VOICE_ALIASES = {NO_VOICE_NAME, "none"}
 
+# Pre-compiled regexes for duration estimation in no-voice mode
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_WORD_RE = re.compile(r"[A-Za-z0-9]+")
+
 
 def _configure_pydub_ffmpeg(audio_segment_cls):
     configured_ffmpeg = utils.get_ffmpeg_binary()
@@ -228,15 +232,16 @@ def estimate_no_voice_duration(text: str) -> float:
     if not normalized_text:
         return 3.0
 
-    cjk_chars = len(re.findall(r"[\u4e00-\u9fff]", normalized_text))
-    words = len(re.findall(r"[A-Za-z0-9]+", normalized_text))
-    ascii_word_chars = sum(len(word) for word in re.findall(r"[A-Za-z0-9]+", normalized_text))
+    cjk_chars = len(_CJK_RE.findall(normalized_text))
+    ascii_words = _WORD_RE.findall(normalized_text)
+    words = len(ascii_words)
+    ascii_word_chars = sum(len(word) for word in ascii_words)
     other_text_chars = 0
     for char in normalized_text:
         # Unicode category 以 L 开头表示各语种字母，N 表示数字。前面已经单独
         # 统计了 CJK 和 ASCII 单词，这里只统计剩余文字，避免英文被重复计时。
         category = unicodedata.category(char)
-        if category.startswith(("L", "N")):
+        if category[0] in ("L", "N"):
             other_text_chars += 1
     other_text_chars = max(other_text_chars - cjk_chars - ascii_word_chars, 0)
     sentence_count = max(len(utils.split_string_by_punctuations(normalized_text)), 1)
