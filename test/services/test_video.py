@@ -184,8 +184,12 @@ class TestVideoService(unittest.TestCase):
 
     def test_get_ffmpeg_binary_uses_configured_env_path(self):
         """配置中显式指定 ffmpeg 时，应优先使用该路径。"""
-        with patch.dict(os.environ, {"IMAGEIO_FFMPEG_EXE": "/tmp/custom-ffmpeg"}, clear=True):
-            self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/custom-ffmpeg")
+        utils.get_ffmpeg_binary.cache_clear()
+        try:
+            with patch.dict(os.environ, {"IMAGEIO_FFMPEG_EXE": "/tmp/custom-ffmpeg"}, clear=True):
+                self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/custom-ffmpeg")
+        finally:
+            utils.get_ffmpeg_binary.cache_clear()
 
     def test_get_ffmpeg_binary_falls_back_to_imageio_ffmpeg(self):
         """
@@ -196,10 +200,14 @@ class TestVideoService(unittest.TestCase):
             get_ffmpeg_exe=lambda: "/tmp/bundled-ffmpeg"
         )
 
-        with patch.dict(os.environ, {}, clear=True), patch.object(
-            utils.shutil, "which", return_value=None
-        ), patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}):
-            self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/bundled-ffmpeg")
+        utils.get_ffmpeg_binary.cache_clear()
+        try:
+            with patch.dict(os.environ, {}, clear=True), patch.object(
+                utils.shutil, "which", return_value=None
+            ), patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}):
+                self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/bundled-ffmpeg")
+        finally:
+            utils.get_ffmpeg_binary.cache_clear()
 
     def test_get_effective_video_codec_falls_back_when_encoder_missing(self):
         """

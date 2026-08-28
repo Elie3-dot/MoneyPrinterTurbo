@@ -824,6 +824,7 @@ def wrap_text(text, max_width, font="Arial", fontsize=60):
     return result, height
 
 
+@lru_cache(maxsize=128)
 def _hex_to_rgb(color: str) -> tuple[int, int, int]:
     # 字幕背景色来自 API/WebUI 参数，可能为空或格式不规范。这里统一只接受
     # #RRGGBB 形式，非法值回退为黑色，避免 PIL 渲染阶段抛出异常中断任务。
