@@ -122,6 +122,7 @@ def public_dir(sub_dir: str = ""):
     return d
 
 
+@lru_cache(maxsize=1)
 def get_ffmpeg_binary() -> str:
     """
     解析当前进程应该使用的 FFmpeg 可执行文件。
