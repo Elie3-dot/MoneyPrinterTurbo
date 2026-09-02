@@ -13,6 +13,9 @@ from loguru import logger
 
 from app.models import const
 
+# Pre-computed set of punctuation characters for O(1) set lookups
+PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
 
 def get_response(status: int, data: Any = None, message: str = ""):
     obj = {
@@ -195,10 +198,8 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
 
 
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Bolt optimization: Use O(1) set membership check via isdisjoint instead of O(N) list scanning
+    return not PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
@@ -232,7 +233,8 @@ def split_string_by_punctuations(s):
             txt += char
             continue
 
-        if char not in const.PUNCTUATIONS:
+        # Bolt optimization: Check O(1) set membership against PUNCTUATION_SET
+        if char not in PUNCTUATION_SET:
             txt += char
         else:
             result.append(txt.strip())

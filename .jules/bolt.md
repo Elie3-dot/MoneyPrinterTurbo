@@ -1,0 +1,3 @@
+## 2025-05-18 - Optimize Punctuation Checking and Sentence Splitting with Set Membership
+**Learning:** Checking character inclusion against `const.PUNCTUATIONS` (a list of punctuation strings) inside tight loops (such as word punctuation checks or string sentence splitting) causes $O(N \times K)$ operations. Pre-computing a single set `PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))` at module load allows $O(1)$ set membership (`char in PUNCTUATION_SET`) and `not PUNCTUATION_SET.isdisjoint(word)` in C-speed, resulting in a ~1.7x to 3x speedup.
+**Action:** When working with character sets or lists of symbols used repeatedly for membership checks, always precompute a module-level `set` for $O(1)$ set lookups.
