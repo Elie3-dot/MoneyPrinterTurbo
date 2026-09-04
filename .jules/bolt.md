@@ -1,0 +1,3 @@
+## 2025-05-20 - O(1) Punctuation Lookup & Buffer Accumulation for Text Splitting
+**Learning:** `split_string_by_punctuations` and `str_contains_punctuation` are called frequently across TTS normalization, subtitle generation, and script breakdown. Searching `const.PUNCTUATIONS` (a list) and repeatedly doing string concatenation (`txt += char`) introduced unnecessary linear scan and reallocation overhead on long text.
+**Action:** Use a pre-computed `PUNCTUATION_SET` for $O(1)$ character membership/disjoint checking and build character strings with list accumulation buffers (`txt.append(char)`) before joining. Ensure number-punctuation exceptions (e.g. `2.5` and `10,000`) are checked with bounded index lookups.
