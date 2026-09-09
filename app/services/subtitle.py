@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import os.path
 import re
@@ -171,30 +172,57 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Optimized Levenshtein distance calculation using two pre-allocated row buffers.
+    Ensures s2 is the shorter string to minimize O(min(N, M)) memory allocations,
+    and uses inline comparisons instead of min() calls for faster inner loops.
+    """
     if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
     if len(s2) == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+    prev_row = list(range(len(s2) + 1))
+    curr_row = [0] * (len(s2) + 1)
 
-    return previous_row[-1]
+    for i, c1 in enumerate(s1, 1):
+        curr_row[0] = i
+        for j, c2 in enumerate(s2, 1):
+            deletion = prev_row[j] + 1
+            insertion = curr_row[j - 1] + 1
+            substitution = prev_row[j - 1] + (0 if c1 == c2 else 1)
+
+            if deletion < insertion:
+                res = deletion
+            else:
+                res = insertion
+            if substitution < res:
+                res = substitution
+            curr_row[j] = res
+        prev_row, curr_row = curr_row, prev_row
+
+    return prev_row[-1]
 
 
-def similarity(a, b):
-    distance = levenshtein_distance(a.lower(), b.lower())
-    max_length = max(len(a), len(b))
-    return 1 - (distance / max_length)
+@lru_cache(maxsize=2048)
+def similarity(a: str, b: str) -> float:
+    """
+    Computes normalized similarity between two strings (1.0 = identical, 0.0 = totally different).
+    Cached via @lru_cache to speed up repetitive string comparisons during subtitle correction.
+    """
+    a_lower = a.lower()
+    b_lower = b.lower()
+    if a_lower == b_lower:
+        return 1.0
+
+    max_length = max(len(a_lower), len(b_lower))
+    if max_length == 0:
+        return 1.0
+
+    distance = levenshtein_distance(a_lower, b_lower)
+    return 1.0 - (distance / max_length)
 
 
 def correct(subtitle_file, video_script):
