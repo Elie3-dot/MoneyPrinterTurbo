@@ -564,6 +564,16 @@ class TestVideoService(unittest.TestCase):
         )
         self.assertEqual(first_a_clip, full_clip)
     
+    def test_get_cached_font_caches_instances(self):
+        """Verify that _get_cached_font caches PIL font instances for string font paths."""
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.skipTest(f"font file not found: {font_path}")
+
+        font1 = vd._get_cached_font(font_path, 40)
+        font2 = vd._get_cached_font(font_path, 40)
+        self.assertIs(font1, font2)
+
     def test_wrap_text(self):
         """test text wrapping function"""
         try:
