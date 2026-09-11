@@ -564,6 +564,29 @@ class TestVideoService(unittest.TestCase):
         )
         self.assertEqual(first_a_clip, full_clip)
     
+    def test_get_cached_font(self):
+        """
+        验证 _get_cached_font 正确缓存 PIL ImageFont 实例并避免重复加载。
+        """
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.skipTest(f"font file not found: {font_path}")
+
+        vd._get_cached_font_impl.cache_clear()
+
+        font1 = vd._get_cached_font(font_path, 30)
+        font2 = vd._get_cached_font(font_path, 30)
+        font3 = vd._get_cached_font(font_path, 40)
+
+        self.assertIs(font1, font2)
+        self.assertIsNot(font1, font3)
+        self.assertEqual(vd._get_cached_font_impl.cache_info().hits, 1)
+
+        # 验证 Path 对象支持
+        path_obj = Path(font_path)
+        font4 = vd._get_cached_font(path_obj, 30)
+        self.assertIs(font1, font4)
+
     def test_wrap_text(self):
         """test text wrapping function"""
         try:
