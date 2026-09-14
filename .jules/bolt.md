@@ -1,0 +1,3 @@
+## 2026-06-18 - FFmpeg resolution caching and string splitting optimization
+**Learning:** `get_ffmpeg_binary()` is invoked repeatedly throughout video processing, audio duration calculation, and TTS generation. Without caching, `shutil.which("ffmpeg")` performs disk PATH lookups on every call (~120ms for 1,000 calls). Using `@lru_cache(maxsize=1)` brings 100,000 calls down to ~20ms. When using LRU cache on `get_ffmpeg_binary()`, test setup (`setUp`/`tearDown`) must clear the cache (`utils.get_ffmpeg_binary.cache_clear()`) when tests patch environment variables or system modules.
+**Action:** Always clear function LRU caches in test fixtures when unit tests mock environment variables or module outputs.

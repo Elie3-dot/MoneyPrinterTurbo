@@ -13,6 +13,9 @@ from loguru import logger
 
 from app.models import const
 
+# Pre-computed set of single-character punctuation marks for O(1) membership and disjoint checks
+_PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
 
 def get_response(status: int, data: Any = None, message: str = ""):
     obj = {
@@ -122,6 +125,7 @@ def public_dir(sub_dir: str = ""):
     return d
 
 
+@lru_cache(maxsize=1)
 def get_ffmpeg_binary() -> str:
     """
     解析当前进程应该使用的 FFmpeg 可执行文件。
@@ -195,33 +199,36 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
 
 
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Optimize punctuation detection using O(1) set disjoint check
+    return not _PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
+    # Optimize string splitting by using list accumulation instead of string concatenation in loops
     result = []
-    txt = ""
+    txt_chars = []
 
     previous_char = ""
     next_char = ""
-    for i in range(len(s)):
+    s_len = len(s)
+    for i in range(s_len):
         char = s[i]
         if char == "\n":
-            result.append(txt.strip())
-            txt = ""
+            if txt_chars:
+                segment = "".join(txt_chars).strip()
+                if segment:
+                    result.append(segment)
+                txt_chars = []
             continue
 
         if i > 0:
             previous_char = s[i - 1]
-        if i < len(s) - 1:
+        if i < s_len - 1:
             next_char = s[i + 1]
 
         if char == "." and previous_char.isdigit() and next_char.isdigit():
-            # # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
-            txt += char
+            # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
+            txt_chars.append(char)
             continue
 
         if char == "," and previous_char.isdigit() and next_char.isdigit():
@@ -229,17 +236,23 @@ def split_string_by_punctuations(s):
             # Edge TTS 的 word boundary 通常会把这种数字整体作为连续内容返回；
             # 如果这里拆成 "1" 和 "000 years"，后续字幕聚合会无法匹配脚本原文，
             # 进而错误回退到 Whisper。
-            txt += char
+            txt_chars.append(char)
             continue
 
-        if char not in const.PUNCTUATIONS:
-            txt += char
+        if char not in _PUNCTUATION_SET:
+            txt_chars.append(char)
         else:
-            result.append(txt.strip())
-            txt = ""
-    result.append(txt.strip())
-    # filter empty string
-    result = list(filter(None, result))
+            if txt_chars:
+                segment = "".join(txt_chars).strip()
+                if segment:
+                    result.append(segment)
+                txt_chars = []
+
+    if txt_chars:
+        segment = "".join(txt_chars).strip()
+        if segment:
+            result.append(segment)
+
     return result
 
 
