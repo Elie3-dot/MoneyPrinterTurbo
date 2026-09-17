@@ -7,6 +7,40 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.services import subtitle
+from app.utils import utils
+
+
+class TestUtilsPunctuation(unittest.TestCase):
+    def test_str_contains_punctuation(self):
+        self.assertTrue(utils.str_contains_punctuation("hello,"))
+        self.assertTrue(utils.str_contains_punctuation("world!"))
+        self.assertTrue(utils.str_contains_punctuation("测试。"))
+        self.assertFalse(utils.str_contains_punctuation("hello"))
+        self.assertFalse(utils.str_contains_punctuation("12345"))
+
+    def test_split_string_by_punctuations(self):
+        text = "Hello world! How are you? Withdraw 10,000, charged at 2.5% fee."
+        expected = [
+            "Hello world",
+            "How are you",
+            "Withdraw 10,000",
+            "charged at 2.5% fee",
+        ]
+        self.assertEqual(utils.split_string_by_punctuations(text), expected)
+
+    def test_split_string_by_punctuations_cjk(self):
+        text = "床前明月光，疑是地上霜。举头望明月，低头思故乡。"
+        expected = [
+            "床前明月光",
+            "疑是地上霜",
+            "举头望明月",
+            "低头思故乡",
+        ]
+        self.assertEqual(utils.split_string_by_punctuations(text), expected)
+
+    def test_root_dir(self):
+        self.assertTrue(Path(utils.root_dir()).exists())
+        self.assertEqual(utils.root_dir(), utils.root_dir())
 
 
 class TestSubtitleService(unittest.TestCase):
