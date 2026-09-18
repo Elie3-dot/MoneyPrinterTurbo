@@ -743,11 +743,26 @@ def combine_videos(
     return combined_video_path
 
 
+@lru_cache(maxsize=128)
+def _get_cached_font_impl(font_path: str, font_size: int):
+    return ImageFont.truetype(font_path, font_size)
+
+
+def _get_cached_font(font_path, font_size: int):
+    """
+    Cache ImageFont.truetype instances to avoid redundant disk reads and font parsing
+    during subtitle clip creation and text wrapping in video generation.
+    """
+    if isinstance(font_path, str) and font_path:
+        return _get_cached_font_impl(font_path, font_size)
+    return ImageFont.truetype(font_path, font_size)
+
+
 def wrap_text(text, max_width, font="Arial", fontsize=60):
     # 字幕换行必须在真正创建 TextClip 前完成，否则 MoviePy 只会按原始文本
     # 计算渲染区域。这里用 PIL 按当前字体和字号测量宽度，确保每一行都尽量
     # 控制在视频可用宽度内，避免大字号或中文长句直接溢出画面。
-    font = ImageFont.truetype(font, fontsize)
+    font = _get_cached_font(font, fontsize)
     max_width = int(max_width)
 
     def get_text_size(inner_text):
@@ -824,6 +839,7 @@ def wrap_text(text, max_width, font="Arial", fontsize=60):
     return result, height
 
 
+@lru_cache(maxsize=128)
 def _hex_to_rgb(color: str) -> tuple[int, int, int]:
     # 字幕背景色来自 API/WebUI 参数，可能为空或格式不规范。这里统一只接受
     # #RRGGBB 形式，非法值回退为黑色，避免 PIL 渲染阶段抛出异常中断任务。
@@ -970,7 +986,7 @@ def generate_video(
             # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
             # PIL 测量最长一行文字，再加水平内边距，避免短字幕出现过宽底板。
             try:
-                font = ImageFont.truetype(font_path, params.font_size)
+                font = _get_cached_font(font_path, params.font_size)
                 text_w = max(
                     int(font.getbbox(line)[2] - font.getbbox(line)[0])
                     for line in wrapped_txt.split("\n")
