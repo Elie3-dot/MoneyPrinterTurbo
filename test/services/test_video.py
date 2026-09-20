@@ -564,6 +564,21 @@ class TestVideoService(unittest.TestCase):
         )
         self.assertEqual(first_a_clip, full_clip)
     
+    def test_get_cached_font(self):
+        """Verify font instances are cached for identical string paths and sizes."""
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        font1 = vd._get_cached_font(font_path, 30)
+        font2 = vd._get_cached_font(font_path, 30)
+        font3 = vd._get_cached_font(font_path, 40)
+
+        # Same font path and size should return identical cached instance
+        self.assertIs(font1, font2)
+        # Different font size should return a new font instance
+        self.assertIsNot(font1, font3)
+
     def test_wrap_text(self):
         """test text wrapping function"""
         try:
