@@ -1181,6 +1181,8 @@ def _build_subtitle_formatter():
 # 阿拉伯语变音符号和 Tatweel 拉长符在 edge-tts 返回文本中可能出现，
 # 这些字符不影响语义，但会导致脚本文本和字幕 cue 字符串精确匹配失败。
 _ARABIC_DIACRITICS = re.compile("[\u0610-\u061A\u064B-\u065F\u0670\u0640\u06D6-\u06ED]")
+# 预编译非字母数字下划线正则，用于字幕归一化匹配，避免在循环中重复编译
+_NON_WORD_RE = re.compile(r"[_\W]+")
 
 
 def _normalize_arabic(text: str) -> str:
@@ -1202,7 +1204,13 @@ def _normalize_arabic(text: str) -> str:
     return text
 
 
-def _match_script_line(script_lines: list[str], current_text: str, sub_index: int) -> str:
+def _match_script_line(
+    script_lines: list[str],
+    current_text: str,
+    sub_index: int,
+    target_norm: str = None,
+    target_ar: str = None,
+) -> str:
     """
     尝试把当前累计的字幕文本，与脚本中的某一条标准断句匹配起来。
 
@@ -1210,6 +1218,10 @@ def _match_script_line(script_lines: list[str], current_text: str, sub_index: in
     1. 优先精确匹配；
     2. 再做一次去标点和 Markdown `_` 格式符后的匹配；
     3. 最后做一次阿拉伯语字符形态归一化匹配。
+
+    为了提高匹配性能，`target_norm` 和 `target_ar` 可由外层循环在
+    切换 `sub_index` 时预先计算并缓存传入，避免针对每个 cue/token
+    重复对同一脚本目标行执行正则清洗。
 
     这样可以兼容：
     - TTS 返回里可能缺失或单独拆分的标点；
@@ -1222,17 +1234,20 @@ def _match_script_line(script_lines: list[str], current_text: str, sub_index: in
     if current_text == target_line:
         return target_line.strip()
 
-    current_text_normalized = re.sub(r"[_\W]+", "", current_text)
-    target_line_normalized = re.sub(r"[_\W]+", "", target_line)
-    if current_text_normalized == target_line_normalized:
+    current_text_normalized = _NON_WORD_RE.sub("", current_text)
+    if target_norm is None:
+        target_norm = _NON_WORD_RE.sub("", target_line)
+    if current_text_normalized == target_norm:
         return target_line.strip()
 
     # 最后一层阿拉伯语容错：edge-tts 返回的字母形态、变音符号或 Tatweel
     # 可能和脚本不同。只在常规匹配失败后归一化比较，非阿拉伯语文本不会受影响。
-    current_ar = re.sub(r"[_\W]+", "", _normalize_arabic(current_text))
-    target_ar = re.sub(r"[_\W]+", "", _normalize_arabic(target_line))
-    if current_ar and current_ar == target_ar:
-        return target_line.strip()
+    if target_ar is None:
+        target_ar = _NON_WORD_RE.sub("", _normalize_arabic(target_line))
+    if target_ar:
+        current_ar = _NON_WORD_RE.sub("", _normalize_arabic(current_text))
+        if current_ar == target_ar:
+            return target_line.strip()
 
     return ""
 
@@ -1286,6 +1301,12 @@ def _build_subtitle_items_from_edge_cues(
     current_text = ""
     current_start_time = None
 
+    # 缓存当前 sub_index 对应目标脚本行的归一化清洗结果，避免单条脚本行在
+    # 多次 cue 拼接过程中被重复对同个目标行做正则清洗。
+    cached_target_index = -1
+    target_norm = None
+    target_ar = None
+
     for cue in sub_maker.cues:
         cue_text = unescape(cue.content)
         if current_start_time is None:
@@ -1294,7 +1315,19 @@ def _build_subtitle_items_from_edge_cues(
         current_end_time = int(cue.end.total_seconds() * 10000000)
         current_text += cue_text
 
-        matched_text = _match_script_line(script_lines, current_text, sub_index)
+        if sub_index != cached_target_index and sub_index < len(script_lines):
+            target_line = script_lines[sub_index]
+            target_norm = _NON_WORD_RE.sub("", target_line)
+            target_ar = _NON_WORD_RE.sub("", _normalize_arabic(target_line))
+            cached_target_index = sub_index
+
+        matched_text = _match_script_line(
+            script_lines,
+            current_text,
+            sub_index,
+            target_norm=target_norm,
+            target_ar=target_ar,
+        )
         if not matched_text:
             continue
 
@@ -1335,13 +1368,31 @@ def _build_subtitle_items_from_legacy_submaker(
 
     legacy_offsets = getattr(sub_maker, "offset", [])
     legacy_subs = getattr(sub_maker, "subs", [])
+
+    cached_target_index = -1
+    target_norm = None
+    target_ar = None
+
     for _, (offset, sub) in enumerate(zip(legacy_offsets, legacy_subs)):
         current_start_time, current_end_time = offset
         if start_time < 0:
             start_time = current_start_time
 
         sub_line += unescape(sub)
-        matched_text = _match_script_line(script_lines, sub_line, sub_index)
+
+        if sub_index != cached_target_index and sub_index < len(script_lines):
+            target_line = script_lines[sub_index]
+            target_norm = _NON_WORD_RE.sub("", target_line)
+            target_ar = _NON_WORD_RE.sub("", _normalize_arabic(target_line))
+            cached_target_index = sub_index
+
+        matched_text = _match_script_line(
+            script_lines,
+            sub_line,
+            sub_index,
+            target_norm=target_norm,
+            target_ar=target_ar,
+        )
         if not matched_text:
             continue
 
