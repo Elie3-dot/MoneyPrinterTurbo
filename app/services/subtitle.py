@@ -1,16 +1,21 @@
+from functools import lru_cache
 import json
 import os.path
 import re
 from timeit import default_timer as timer
 
-try:
-    from faster_whisper import WhisperModel
-except ImportError:
-    WhisperModel = None
 from loguru import logger
 
 from app.config import config
 from app.utils import utils
+
+# Pre-compile SRT time regex for faster line scanning
+_SRT_TIME_RE = re.compile(r"([0-9]*:[0-9]*:[0-9]*,[0-9]*)")
+
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
 
 model_size = config.whisper.get("model_size", "large-v3")
 device = config.whisper.get("device", "cpu")
@@ -152,10 +157,13 @@ def file_to_subtitles(filename):
     index = 0
     with open(filename, "r", encoding="utf-8") as f:
         for line in f:
-            times = re.findall("([0-9]*:[0-9]*:[0-9]*,[0-9]*)", line)
-            if times:
-                current_times = line
-            elif line.strip() == "" and current_times:
+            # Pre-screen lines for time marker to avoid evaluating regex on regular text lines
+            if "-->" in line:
+                times = _SRT_TIME_RE.findall(line)
+                if times:
+                    current_times = line
+                    continue
+            if line.strip() == "" and current_times:
                 index += 1
                 times_texts.append((index, current_times.strip(), current_text.strip()))
                 current_times, current_text = None, ""
@@ -171,30 +179,41 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
+@lru_cache(maxsize=2048)
+def levenshtein_distance(s1: str, s2: str) -> int:
+
     if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
     if len(s2) == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
+    # Use flat list pre-allocation and row swapping to minimize memory allocations
+    previous_row = list(range(len(s2) + 1))
+    current_row = [0] * (len(s2) + 1)
+
     for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+        current_row[0] = i + 1
         for j, c2 in enumerate(s2):
             insertions = previous_row[j + 1] + 1
             deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            if insertions < deletions:
+                current_row[j + 1] = insertions if insertions < substitutions else substitutions
+            else:
+                current_row[j + 1] = deletions if deletions < substitutions else substitutions
+        previous_row, current_row = current_row, previous_row
 
     return previous_row[-1]
 
 
-def similarity(a, b):
+@lru_cache(maxsize=2048)
+def similarity(a: str, b: str) -> float:
     distance = levenshtein_distance(a.lower(), b.lower())
     max_length = max(len(a), len(b))
-    return 1 - (distance / max_length)
+    if max_length == 0:
+        return 1.0
+    return 1.0 - (distance / max_length)
 
 
 def correct(subtitle_file, video_script):
