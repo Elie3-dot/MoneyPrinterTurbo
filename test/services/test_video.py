@@ -634,6 +634,24 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font_caches_instances_and_handles_unhashable(self):
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            font_path = "Arial"
+
+        font1 = vd._get_cached_font(font_path, 30)
+        font2 = vd._get_cached_font(font_path, 30)
+        self.assertIs(font1, font2)
+
+        class UnhashablePath:
+            __hash__ = None
+
+            def __str__(self):
+                return font_path
+
+        fallback_font = vd._get_cached_font(UnhashablePath(), 30)
+        self.assertIsNotNone(fallback_font)
+
 
 if __name__ == "__main__":
     unittest.main()
