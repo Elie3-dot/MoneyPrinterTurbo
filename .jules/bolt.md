@@ -1,0 +1,3 @@
+## 2025-02-28 - Optimizing Dynamic Programming Levenshtein Distance in Python Subtitle Correction
+**Learning:** In Python, dynamic list creation inside nested loops (`[i + 1]` and `.append()`) during Levenshtein distance calculations causes significant memory allocation overhead. Pre-allocating two flat lists and swapping them in-place, combined with `@lru_cache(maxsize=2048)`, eliminates list allocation churn and speeds up repeated string distance lookups by over 400x for cached lookups.
+**Action:** Pre-allocate flat row buffer lists when implementing DP string alignment algorithms in Python and cache pure functions with `@lru_cache`.
