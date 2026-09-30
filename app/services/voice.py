@@ -1181,6 +1181,8 @@ def _build_subtitle_formatter():
 # 阿拉伯语变音符号和 Tatweel 拉长符在 edge-tts 返回文本中可能出现，
 # 这些字符不影响语义，但会导致脚本文本和字幕 cue 字符串精确匹配失败。
 _ARABIC_DIACRITICS = re.compile("[\u0610-\u061A\u064B-\u065F\u0670\u0640\u06D6-\u06ED]")
+# 预编译非字母数字和下划线正则，避免在字幕逐 cue 匹配循环中频繁重新编译
+_NON_WORD_RE = re.compile(r"[_\W]+")
 
 
 def _normalize_arabic(text: str) -> str:
@@ -1202,7 +1204,12 @@ def _normalize_arabic(text: str) -> str:
     return text
 
 
-def _match_script_line(script_lines: list[str], current_text: str, sub_index: int) -> str:
+def _match_script_line(
+    script_lines: list[str],
+    current_text: str,
+    sub_index: int,
+    target_info: tuple[str, str, str, str] | None = None,
+) -> str:
     """
     尝试把当前累计的字幕文本，与脚本中的某一条标准断句匹配起来。
 
@@ -1215,24 +1222,28 @@ def _match_script_line(script_lines: list[str], current_text: str, sub_index: in
     - TTS 返回里可能缺失或单独拆分的标点；
     - 中文场景下词边界和脚本文本不完全一一对应的情况。
     """
-    if len(script_lines) <= sub_index:
-        return ""
+    if target_info is None:
+        if len(script_lines) <= sub_index:
+            return ""
+        target_line = script_lines[sub_index]
+        target_stripped = target_line.strip()
+        target_norm = _NON_WORD_RE.sub("", target_line)
+        target_ar = _NON_WORD_RE.sub("", _normalize_arabic(target_line))
+    else:
+        target_line, target_stripped, target_norm, target_ar = target_info
 
-    target_line = script_lines[sub_index]
     if current_text == target_line:
-        return target_line.strip()
+        return target_stripped
 
-    current_text_normalized = re.sub(r"[_\W]+", "", current_text)
-    target_line_normalized = re.sub(r"[_\W]+", "", target_line)
-    if current_text_normalized == target_line_normalized:
-        return target_line.strip()
+    current_text_normalized = _NON_WORD_RE.sub("", current_text)
+    if current_text_normalized == target_norm:
+        return target_stripped
 
     # 最后一层阿拉伯语容错：edge-tts 返回的字母形态、变音符号或 Tatweel
     # 可能和脚本不同。只在常规匹配失败后归一化比较，非阿拉伯语文本不会受影响。
-    current_ar = re.sub(r"[_\W]+", "", _normalize_arabic(current_text))
-    target_ar = re.sub(r"[_\W]+", "", _normalize_arabic(target_line))
+    current_ar = _NON_WORD_RE.sub("", _normalize_arabic(current_text))
     if current_ar and current_ar == target_ar:
-        return target_line.strip()
+        return target_stripped
 
     return ""
 
@@ -1286,6 +1297,17 @@ def _build_subtitle_items_from_edge_cues(
     current_text = ""
     current_start_time = None
 
+    # 预先归一化目标脚本行，避免在逐 cue 迭代匹配时重复进行正则解析和文本清洗
+    targets = [
+        (
+            line,
+            line.strip(),
+            _NON_WORD_RE.sub("", line),
+            _NON_WORD_RE.sub("", _normalize_arabic(line)),
+        )
+        for line in script_lines
+    ]
+
     for cue in sub_maker.cues:
         cue_text = unescape(cue.content)
         if current_start_time is None:
@@ -1294,7 +1316,8 @@ def _build_subtitle_items_from_edge_cues(
         current_end_time = int(cue.end.total_seconds() * 10000000)
         current_text += cue_text
 
-        matched_text = _match_script_line(script_lines, current_text, sub_index)
+        target_info = targets[sub_index] if sub_index < len(targets) else None
+        matched_text = _match_script_line(script_lines, current_text, sub_index, target_info)
         if not matched_text:
             continue
 
@@ -1333,6 +1356,17 @@ def _build_subtitle_items_from_legacy_submaker(
     sub_index = 0
     sub_line = ""
 
+    # 预先归一化目标脚本行，避免在逐 cue 迭代匹配时重复进行正则解析和文本清洗
+    targets = [
+        (
+            line,
+            line.strip(),
+            _NON_WORD_RE.sub("", line),
+            _NON_WORD_RE.sub("", _normalize_arabic(line)),
+        )
+        for line in script_lines
+    ]
+
     legacy_offsets = getattr(sub_maker, "offset", [])
     legacy_subs = getattr(sub_maker, "subs", [])
     for _, (offset, sub) in enumerate(zip(legacy_offsets, legacy_subs)):
@@ -1341,7 +1375,8 @@ def _build_subtitle_items_from_legacy_submaker(
             start_time = current_start_time
 
         sub_line += unescape(sub)
-        matched_text = _match_script_line(script_lines, sub_line, sub_index)
+        target_info = targets[sub_index] if sub_index < len(targets) else None
+        matched_text = _match_script_line(script_lines, sub_line, sub_index, target_info)
         if not matched_text:
             continue
 
