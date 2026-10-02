@@ -1,0 +1,3 @@
+## 2026-06-18 - Fast String Splitting & Punctuation Checks with Hash Sets
+**Learning:** In Python, iterating character-by-character over strings and appending characters via string concatenation (`txt += char`) introduces $O(N^2)$ memory allocation overhead. Replacing list string building (`txt_chars.append(char)`) and `"".join()` eliminates temporary string copies. In addition, checking if a word contains punctuation using `not PUNCTUATION_SET.isdisjoint(word)` with a precomputed `set` is significantly faster than linear list scanning (`p in word` for `p` in list).
+**Action:** Always precompute punctuation character sets for $O(1)$ set membership checks, and accumulate characters in lists when splitting strings.
