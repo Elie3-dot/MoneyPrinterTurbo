@@ -634,6 +634,27 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font(self):
+        """
+        Verify that _get_cached_font caches ImageFont instances and returns
+        identical instances for identical font path and font size inputs.
+        """
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        vd._get_cached_font_internal.cache_clear()
+
+        font1 = vd._get_cached_font(font_path, 32)
+        font2 = vd._get_cached_font(font_path, 32)
+        font3 = vd._get_cached_font(font_path, 48)
+
+        self.assertIs(font1, font2)
+        self.assertIsNot(font1, font3)
+
+        # Existing ImageFont instance passed in should be returned as-is
+        self.assertIs(vd._get_cached_font(font1, 32), font1)
+
 
 if __name__ == "__main__":
     unittest.main()
