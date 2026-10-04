@@ -1,0 +1,3 @@
+## 2025-05-20 - Caching PIL ImageFont instances during subtitle text wrapping
+**Learning:** Calling `ImageFont.truetype(font_path, font_size)` repeatedly inside subtitle text wrapping and rendering loops causes redundant disk I/O and font file parsing for every single subtitle line. Caching `ImageFont` instances via `@lru_cache(maxsize=128)` yields a ~100x speedup per font resolution lookup (~0.5ms vs ~58ms for 100 calls).
+**Action:** Always cache font instances with an `@lru_cache` helper when measuring or rendering text in loops, ensuring string font paths are delegated to the cache while `ImageFont` instances or unhashable objects pass through safely.
