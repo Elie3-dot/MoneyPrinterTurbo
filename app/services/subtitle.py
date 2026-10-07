@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import os.path
 import re
@@ -171,30 +172,43 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
+@lru_cache(maxsize=2048)
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Calculate the Levenshtein distance between two strings with LRU caching.
+    Optimized with double row buffering to eliminate list allocation overhead in inner loops.
+    """
     if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
-    if len(s2) == 0:
+    len_s2 = len(s2)
+    if len_s2 == 0:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
+    previous_row = list(range(len_s2 + 1))
+    current_row = [0] * (len_s2 + 1)
+
     for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+        current_row[0] = i + 1
         for j, c2 in enumerate(s2):
             insertions = previous_row[j + 1] + 1
             deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            if insertions < deletions:
+                current_row[j + 1] = insertions if insertions < substitutions else substitutions
+            else:
+                current_row[j + 1] = deletions if deletions < substitutions else substitutions
+        previous_row, current_row = current_row, previous_row
 
     return previous_row[-1]
 
 
-def similarity(a, b):
-    distance = levenshtein_distance(a.lower(), b.lower())
+def similarity(a: str, b: str) -> float:
     max_length = max(len(a), len(b))
-    return 1 - (distance / max_length)
+    if max_length == 0:
+        return 1.0
+    distance = levenshtein_distance(a.lower(), b.lower())
+    return 1.0 - (distance / max_length)
 
 
 def correct(subtitle_file, video_script):
