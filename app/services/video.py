@@ -743,18 +743,32 @@ def combine_videos(
     return combined_video_path
 
 
+@lru_cache(maxsize=128)
+def _get_cached_font_impl(font_path_or_name: str, fontsize: int):
+    return ImageFont.truetype(font_path_or_name, fontsize)
+
+
+def _get_cached_font(font, fontsize: int):
+    """
+    Cache ImageFont.truetype instances to avoid repeated disk I/O and font table parsing.
+    """
+    if isinstance(font, str):
+        return _get_cached_font_impl(font, int(fontsize))
+    return ImageFont.truetype(font, int(fontsize))
+
+
 def wrap_text(text, max_width, font="Arial", fontsize=60):
     # 字幕换行必须在真正创建 TextClip 前完成，否则 MoviePy 只会按原始文本
     # 计算渲染区域。这里用 PIL 按当前字体和字号测量宽度，确保每一行都尽量
     # 控制在视频可用宽度内，避免大字号或中文长句直接溢出画面。
-    font = ImageFont.truetype(font, fontsize)
+    font_obj = _get_cached_font(font, fontsize)
     max_width = int(max_width)
 
     def get_text_size(inner_text):
         inner_text = inner_text.strip()
         if not inner_text:
             return 0, fontsize
-        left, top, right, bottom = font.getbbox(inner_text)
+        left, top, right, bottom = font_obj.getbbox(inner_text)
         return right - left, bottom - top
 
     width, height = get_text_size(text)
@@ -970,7 +984,7 @@ def generate_video(
             # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
             # PIL 测量最长一行文字，再加水平内边距，避免短字幕出现过宽底板。
             try:
-                font = ImageFont.truetype(font_path, params.font_size)
+                font = _get_cached_font(font_path, params.font_size)
                 text_w = max(
                     int(font.getbbox(line)[2] - font.getbbox(line)[0])
                     for line in wrapped_txt.split("\n")
