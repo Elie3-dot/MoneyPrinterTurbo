@@ -622,6 +622,23 @@ class TestVideoService(unittest.TestCase):
         finally:
             clip.close()
 
+    def test_get_cached_font(self):
+        """Verify that _get_cached_font caches PIL font loading across calls."""
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.fail(f"font file not found: {font_path}")
+
+        vd._get_cached_font_internal.cache_clear()
+
+        f1 = vd._get_cached_font(font_path, 30)
+        f2 = vd._get_cached_font(font_path, 30)
+        self.assertIs(f1, f2)
+
+        # Test unhashable font argument fallback (e.g. unhashable file object)
+        with open(font_path, "rb") as font_obj:
+            f3 = vd._get_cached_font(font_obj, 30)
+            self.assertIsNotNone(f3)
+
     def test_get_temp_audio_dir_returns_system_temp_on_windows(self):
         with patch("sys.platform", "win32"):
             result = vd._get_temp_audio_dir("/some/output/dir")
