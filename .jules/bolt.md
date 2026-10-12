@@ -1,0 +1,3 @@
+## 2025-05-18 - String punctuation splitting and root_dir lookup optimization
+**Learning:** In Python text processing loops, replacing iterative string concatenation (`txt += char`) with list accumulation (`txt_chars.append(char)`) and pre-computing punctuation set constants eliminates quadratic re-allocations and linear lookup overhead during sentence splitting. Furthermore, module-level pre-computation of project `root_dir` eliminates redundant filesystem `realpath` calls.
+**Action:** Always pre-compute static constants at module level and buffer string building in character/token loops using `list` and `str.join()`.
