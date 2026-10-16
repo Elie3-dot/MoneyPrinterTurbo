@@ -13,6 +13,9 @@ from loguru import logger
 
 from app.models import const
 
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
 
 def get_response(status: int, data: Any = None, message: str = ""):
     obj = {
@@ -66,7 +69,7 @@ def get_uuid(remove_hyphen: bool = False):
 
 
 def root_dir():
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    return _ROOT_DIR
 
 
 def storage_dir(sub_dir: str = "", create: bool = False):
@@ -195,51 +198,44 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
 
 
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Optimized O(1) set membership check using set disjointness
+    return not PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
+    # Optimized character list accumulation and pre-computed set membership check
     result = []
-    txt = ""
+    txt_chars = []
+    n = len(s)
 
-    previous_char = ""
-    next_char = ""
-    for i in range(len(s)):
-        char = s[i]
+    for i, char in enumerate(s):
         if char == "\n":
-            result.append(txt.strip())
-            txt = ""
+            if txt_chars:
+                t = "".join(txt_chars).strip()
+                if t:
+                    result.append(t)
+                txt_chars = []
             continue
 
-        if i > 0:
-            previous_char = s[i - 1]
-        if i < len(s) - 1:
-            next_char = s[i + 1]
-
-        if char == "." and previous_char.isdigit() and next_char.isdigit():
-            # # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
-            txt += char
+        if (char == "." or char == ",") and 0 < i < n - 1 and s[i - 1].isdigit() and s[i + 1].isdigit():
+            # In numbers like "1,000" or "2.5%", commas and dots are not sentence boundaries
+            txt_chars.append(char)
             continue
 
-        if char == "," and previous_char.isdigit() and next_char.isdigit():
-            # 英文数字里的千分位逗号不是断句符，例如 "1,000 years"。
-            # Edge TTS 的 word boundary 通常会把这种数字整体作为连续内容返回；
-            # 如果这里拆成 "1" 和 "000 years"，后续字幕聚合会无法匹配脚本原文，
-            # 进而错误回退到 Whisper。
-            txt += char
-            continue
-
-        if char not in const.PUNCTUATIONS:
-            txt += char
+        if char not in PUNCTUATION_SET:
+            txt_chars.append(char)
         else:
-            result.append(txt.strip())
-            txt = ""
-    result.append(txt.strip())
-    # filter empty string
-    result = list(filter(None, result))
+            if txt_chars:
+                t = "".join(txt_chars).strip()
+                if t:
+                    result.append(t)
+                txt_chars = []
+
+    if txt_chars:
+        t = "".join(txt_chars).strip()
+        if t:
+            result.append(t)
+
     return result
 
 
