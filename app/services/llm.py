@@ -24,6 +24,15 @@ _SENSITIVE_QUERY_RE = re.compile(
     r"([?&](?:api[_-]?key|access[_-]?token|token|key|secret|password)=)([^&#\s]+)",
     re.IGNORECASE,
 )
+_MARKDOWN_BRACKETS_RE = re.compile(r"\[.*\]")
+_MARKDOWN_PARENS_RE = re.compile(r"\(.*\)")
+_CODE_FENCE_START_RE = re.compile(r"^```[a-zA-Z0-9]*\s*")
+_CODE_FENCE_END_RE = re.compile(r"\s*```$")
+_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+_HASHTAG_SPLIT_RE = re.compile(r"[\s,]+")
+_HASHTAG_CLEAN_RE = re.compile(r"[^\w]", re.UNICODE)
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?。！？])\s+")
 
 DEFAULT_SCRIPT_SYSTEM_PROMPT = """
 # Role: Video Script Generator
@@ -684,8 +693,8 @@ def generate_script(
         response = response.replace("#", "")
 
         # Remove markdown syntax
-        response = re.sub(r"\[.*\]", "", response)
-        response = re.sub(r"\(.*\)", "", response)
+        response = _MARKDOWN_BRACKETS_RE.sub("", response)
+        response = _MARKDOWN_PARENS_RE.sub("", response)
 
         # Split the script into paragraphs
         paragraphs = response.split("\n\n")
@@ -733,8 +742,8 @@ def _strip_code_fence(text: str) -> str:
     """
     t = (text or "").strip()
     if t.startswith("```"):
-        t = re.sub(r"^```[a-zA-Z0-9]*\s*", "", t)
-        t = re.sub(r"\s*```$", "", t)
+        t = _CODE_FENCE_START_RE.sub("", t)
+        t = _CODE_FENCE_END_RE.sub("", t)
     return t.strip()
 
 
@@ -824,7 +833,7 @@ Please note that you must use English for generating video search terms; Chinese
         except Exception as e:
             logger.warning(f"failed to generate video terms: {str(e)}")
             if response:
-                match = re.search(r"\[.*]", response, re.DOTALL)
+                match = _JSON_ARRAY_RE.search(response)
                 if match:
                     try:
                         search_terms = json.loads(match.group())
@@ -941,7 +950,7 @@ def _normalize_hashtags(raw, count: int) -> List[str]:
     重复标签或不符合常见格式的 hashtag。
     """
     if isinstance(raw, str):
-        candidates = re.split(r"[\s,]+", raw)
+        candidates = _HASHTAG_SPLIT_RE.split(raw)
     elif isinstance(raw, (list, tuple)):
         # 数组里的每一项视为一个完整标签，因此 "du lich" 会变成
         # "#dulich"，而不是拆成两个标签。
@@ -952,7 +961,7 @@ def _normalize_hashtags(raw, count: int) -> List[str]:
     seen = set()
     result: List[str] = []
     for item in candidates:
-        tag = re.sub(r"[^\w]", "", item, flags=re.UNICODE)
+        tag = _HASHTAG_CLEAN_RE.sub("", item)
         if not tag:
             continue
         key = tag.lower()
@@ -1018,7 +1027,7 @@ def _parse_social_metadata(response: str, platform: str) -> dict:
     except Exception:
         # 部分模型会在 JSON 外层包一段说明文字或 markdown fence。
         # API 调用方只需要稳定结构，所以这里尝试提取第一个 JSON object。
-        match = re.search(r"\{.*\}", response or "", re.DOTALL)
+        match = _JSON_OBJECT_RE.search(response or "")
         if match:
             data = json.loads(match.group())
 
@@ -1045,7 +1054,7 @@ def _fallback_social_metadata(
     title = subject
     if not title and script:
         # 没有主题时，用脚本第一句兜底生成 title，避免接口返回空标题。
-        title = re.split(r"(?<=[.!?。！？])\s+", script)[0]
+        title = _SENTENCE_SPLIT_RE.split(script)[0]
 
     return {
         "title": _clamp_text(title, spec["title_max"]),
