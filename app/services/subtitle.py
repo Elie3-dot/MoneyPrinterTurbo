@@ -1,6 +1,7 @@
 import json
 import os.path
 import re
+from functools import lru_cache
 from timeit import default_timer as timer
 
 try:
@@ -11,6 +12,9 @@ from loguru import logger
 
 from app.config import config
 from app.utils import utils
+
+# Pre-compiled regular expression for SRT timestamp line matching
+_SRT_TIME_RE = re.compile(r"\d+:\d+:\d+,\d+")
 
 model_size = config.whisper.get("model_size", "large-v3")
 device = config.whisper.get("device", "cpu")
@@ -152,8 +156,8 @@ def file_to_subtitles(filename):
     index = 0
     with open(filename, "r", encoding="utf-8") as f:
         for line in f:
-            times = re.findall("([0-9]*:[0-9]*:[0-9]*,[0-9]*)", line)
-            if times:
+            # Pre-screen lines containing '-->' before running regex search
+            if "-->" in line and _SRT_TIME_RE.search(line):
                 current_times = line
             elif line.strip() == "" and current_times:
                 index += 1
@@ -171,22 +175,37 @@ def file_to_subtitles(filename):
     return times_texts
 
 
-def levenshtein_distance(s1, s2):
+@lru_cache(maxsize=2048)
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Compute Levenshtein distance between two strings.
+    Optimized with @lru_cache, string length swapping so s2 is shorter,
+    and pre-allocated flat row lists to minimize memory allocations.
+    """
     if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
-    if len(s2) == 0:
+    if not s2:
         return len(s1)
 
-    previous_row = range(len(s2) + 1)
+    len_s2 = len(s2)
+    previous_row = list(range(len_s2 + 1))
+    current_row = [0] * (len_s2 + 1)
+
     for i, c1 in enumerate(s1):
-        current_row = [i + 1]
+        current_row[0] = i + 1
         for j, c2 in enumerate(s2):
             insertions = previous_row[j + 1] + 1
             deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
+            if insertions < deletions:
+                min_val = insertions
+            else:
+                min_val = deletions
+            if substitutions < min_val:
+                min_val = substitutions
+            current_row[j + 1] = min_val
+        previous_row, current_row = current_row, previous_row
 
     return previous_row[-1]
 
