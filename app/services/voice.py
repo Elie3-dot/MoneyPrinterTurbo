@@ -12,6 +12,7 @@ import threading
 import time
 import unicodedata
 from datetime import datetime
+from functools import lru_cache
 from typing import Union
 from xml.sax.saxutils import unescape
 
@@ -153,21 +154,32 @@ def _load_azure_voices() -> list[dict]:
     return _azure_voices_cache
 
 
-def get_all_azure_voices(filter_locals=None) -> list[str]:
+@lru_cache(maxsize=128)
+def _get_all_azure_voices_cached(filter_locals_tuple: tuple) -> list[str]:
     voices = []
+    filter_locals_lower = (
+        [fl.lower() for fl in filter_locals_tuple] if filter_locals_tuple else None
+    )
     for item in _load_azure_voices():
         name = item["name"]
         gender = item["gender"]
         # 应用过滤条件
-        if filter_locals and any(
-            name.lower().startswith(fl.lower()) for fl in filter_locals
-        ):
-            voices.append(f"{name}-{gender}")
-        elif not filter_locals:
+        if filter_locals_lower:
+            name_lower = name.lower()
+            if any(name_lower.startswith(fl) for fl in filter_locals_lower):
+                voices.append(f"{name}-{gender}")
+        else:
             voices.append(f"{name}-{gender}")
 
     voices.sort()
     return voices
+
+
+def get_all_azure_voices(filter_locals=None) -> list[str]:
+    # Cache Azure voice list lookups to avoid repetitive JSON list processing,
+    # string lowercasing, and sorting on WebUI reruns and API calls.
+    filter_tuple = tuple(filter_locals) if filter_locals else ()
+    return _get_all_azure_voices_cached(filter_tuple).copy()
 
 
 def parse_voice_name(name: str):
