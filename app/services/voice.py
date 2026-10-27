@@ -1416,7 +1416,11 @@ def _get_audio_duration_from_mp3(mp3_file: str) -> float:
         return 0.0
 
     try:
-        # Use moviepy to get the duration of the MP3 file
+        duration = utils.get_audio_duration_ffmpeg(mp3_file)
+        if duration > 0:
+            return duration
+
+        # Fallback to moviepy
         with AudioFileClip(mp3_file) as audio:
             return audio.duration  # Duration in seconds
     except Exception as e:

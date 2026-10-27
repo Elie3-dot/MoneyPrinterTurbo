@@ -3,6 +3,7 @@ import locale
 import os
 import re
 import shutil
+import subprocess
 from functools import lru_cache
 from pathlib import Path
 import threading
@@ -309,3 +310,81 @@ def load_locales(i18n_dir):
 
 def parse_extension(filename):
     return Path(filename).suffix.lower().lstrip('.')
+
+
+def get_audio_duration_ffmpeg(file_path: str) -> float:
+    """
+    Get duration in seconds of an audio or video file using a fast ffmpeg probe.
+    Returns 0.0 if probe fails or file does not exist.
+    """
+    if not file_path or not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return 0.0
+
+    try:
+        ffmpeg_bin = get_ffmpeg_binary()
+        cmd = [ffmpeg_bin, "-hide_banner", "-i", file_path]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, timeout=10
+        )
+        output = result.stderr or ""
+        dur_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", output)
+        if dur_match:
+            hours = float(dur_match.group(1))
+            minutes = float(dur_match.group(2))
+            seconds = float(dur_match.group(3))
+            return hours * 3600 + minutes * 60 + seconds
+    except Exception as exc:
+        logger.debug(f"failed to get audio duration via ffmpeg probe for {file_path}: {exc}")
+
+    return 0.0
+
+
+def get_video_info(file_path: str) -> tuple[float, int, int, float]:
+    """
+    Get (duration_seconds, width, height, fps) of a video file using a fast ffmpeg probe.
+    Returns (0.0, 0, 0, 0.0) if probe fails or file does not exist.
+    """
+    if not file_path or not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return 0.0, 0, 0, 0.0
+
+    try:
+        ffmpeg_bin = get_ffmpeg_binary()
+        cmd = [ffmpeg_bin, "-hide_banner", "-i", file_path]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, timeout=10
+        )
+        output = result.stderr or ""
+
+        duration = 0.0
+        width = 0
+        height = 0
+        fps = 0.0
+
+        dur_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", output)
+        if dur_match:
+            hours = float(dur_match.group(1))
+            minutes = float(dur_match.group(2))
+            seconds = float(dur_match.group(3))
+            duration = hours * 3600 + minutes * 60 + seconds
+
+        for line in output.splitlines():
+            if "Stream #" in line and "Video:" in line:
+                res_match = re.search(r"(\d{2,5})x(\d{2,5})", line)
+                if res_match:
+                    width = int(res_match.group(1))
+                    height = int(res_match.group(2))
+
+                fps_match = re.search(r"(\d+(?:\.\d+)?)\s+fps", line)
+                if fps_match:
+                    fps = float(fps_match.group(1))
+                elif "tbr" in line:
+                    tbr_match = re.search(r"(\d+(?:\.\d+)?)\s+tbr", line)
+                    if tbr_match:
+                        fps = float(tbr_match.group(1))
+                break
+
+        return duration, width, height, fps
+    except Exception as exc:
+        logger.debug(f"failed to get video info via ffmpeg probe for {file_path}: {exc}")
+
+    return 0.0, 0, 0, 0.0

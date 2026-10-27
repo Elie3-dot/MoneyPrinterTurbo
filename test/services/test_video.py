@@ -634,6 +634,21 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_ffmpeg_fast_probes(self):
+        video_path = os.path.join(resources_dir, "1.png.mp4")
+        if not os.path.exists(video_path):
+            self.fail(f"test video not found: {video_path}")
+
+        duration, w, h, fps = utils.get_video_info(video_path)
+        self.assertGreater(duration, 0)
+        self.assertGreater(w, 0)
+        self.assertGreater(h, 0)
+        self.assertGreater(fps, 0)
+
+        audio_duration = utils.get_audio_duration_ffmpeg(video_path)
+        self.assertGreater(audio_duration, 0)
+        self.assertAlmostEqual(duration, audio_duration, delta=0.5)
+
 
 if __name__ == "__main__":
     unittest.main()
