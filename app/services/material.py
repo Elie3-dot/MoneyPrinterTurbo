@@ -256,7 +256,9 @@ def save_video(video_url: str, save_dir: str = "") -> str:
     # if video already exists, return the path
     if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
         logger.info(f"video already exists: {video_path}")
-        return video_path
+        v_dur, _, _, v_fps = utils.get_video_info(video_path)
+        if v_dur > 0 and v_fps > 0:
+            return video_path
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -275,6 +277,10 @@ def save_video(video_url: str, save_dir: str = "") -> str:
         )
 
     if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
+        v_dur, _, _, v_fps = utils.get_video_info(video_path)
+        if v_dur > 0 and v_fps > 0:
+            return video_path
+
         clip = None
         try:
             clip = VideoFileClip(video_path)

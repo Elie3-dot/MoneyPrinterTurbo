@@ -568,11 +568,17 @@ def combine_videos(
     subclipped_items = []
     video_duration = 0
     for video_path in video_paths:
-        clip = _open_video_clip_quietly(video_path)
-        clip_duration = clip.duration
-        clip_w, clip_h = clip.size
-        close_clip(clip)
-        
+        # Fast FFmpeg probe to get duration, width, and height without heavy MoviePy clip initialization
+        v_dur, v_w, v_h, _ = utils.get_video_info(video_path)
+        if v_dur > 0 and v_w > 0 and v_h > 0:
+            clip_duration = v_dur
+            clip_w, clip_h = v_w, v_h
+        else:
+            clip = _open_video_clip_quietly(video_path)
+            clip_duration = clip.duration
+            clip_w, clip_h = clip.size
+            close_clip(clip)
+
         start_time = 0
 
         while start_time < clip_duration:
