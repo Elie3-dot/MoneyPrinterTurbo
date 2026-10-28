@@ -87,6 +87,22 @@ class TestSubtitleService(unittest.TestCase):
 
         self.assertEqual([item[2] for item in items], ["Hello", "World"])
 
+    def test_levenshtein_distance_and_similarity(self):
+        """Test levenshtein_distance calculation and string similarity matching."""
+        # Distance checks
+        self.assertEqual(subtitle.levenshtein_distance("kitten", "sitting"), 3)
+        self.assertEqual(subtitle.levenshtein_distance("", ""), 0)
+        self.assertEqual(subtitle.levenshtein_distance("abc", ""), 3)
+        self.assertEqual(subtitle.levenshtein_distance("", "abc"), 3)
+        self.assertEqual(subtitle.levenshtein_distance("same", "same"), 0)
+
+        # Similarity checks
+        self.assertEqual(subtitle.similarity("", ""), 1.0)
+        self.assertEqual(subtitle.similarity("hello", "hello"), 1.0)
+        self.assertEqual(subtitle.similarity("Hello", "hello"), 1.0)  # Case insensitive
+        self.assertAlmostEqual(subtitle.similarity("kitten", "sitting"), 1.0 - (3 / 7))
+        self.assertEqual(subtitle.similarity("abc", "def"), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
