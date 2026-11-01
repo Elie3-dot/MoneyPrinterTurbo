@@ -733,6 +733,59 @@ class TestVoiceService(unittest.TestCase):
         self.assertEqual(vs.convert_rate_to_percent(1.5), "+50%")
         self.assertEqual(vs.convert_rate_to_percent(0.8), "-20%")
 
+    def test_str_contains_punctuation(self):
+        self.assertTrue(utils.str_contains_punctuation("hello!"))
+        self.assertTrue(utils.str_contains_punctuation("foo...bar"))
+        self.assertTrue(utils.str_contains_punctuation("床前明月光，"))
+        self.assertTrue(utils.str_contains_punctuation("كيف حالك؟"))
+        self.assertTrue(utils.str_contains_punctuation("12.5"))
+        self.assertFalse(utils.str_contains_punctuation("hello world"))
+        self.assertFalse(utils.str_contains_punctuation("test123"))
+        self.assertFalse(utils.str_contains_punctuation(""))
+
+    def test_split_string_by_punctuations_edge_cases(self):
+        self.assertEqual(utils.split_string_by_punctuations(""), [])
+        self.assertEqual(utils.split_string_by_punctuations("   "), [])
+        self.assertEqual(
+            utils.split_string_by_punctuations("hello world"),
+            ["hello world"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations("hello... world!?"),
+            ["hello", "world"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations(
+                "withdraw 10,000, charged at 2.5% fee"
+            ),
+            ["withdraw 10,000", "charged at 2.5% fee"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations("charged at 2.5% fee"),
+            ["charged at 2.5% fee"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations("\n\nline1\nline2\n"),
+            ["line1", "line2"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations("...leading and trailing!"),
+            ["leading and trailing"],
+        )
+        self.assertEqual(
+            utils.split_string_by_punctuations(
+                "床前明月光，疑是地上霜。举头望明月，低头思故乡。"
+            ),
+            ["床前明月光", "疑是地上霜", "举头望明月", "低头思故乡"],
+        )
+
+    def test_root_dir_is_cached_and_consistent(self):
+        root1 = utils.root_dir()
+        root2 = utils.root_dir()
+        self.assertEqual(root1, root2)
+        self.assertTrue(os.path.isdir(root1))
+        self.assertTrue(os.path.isfile(os.path.join(root1, "main.py")))
+
 
 if __name__ == "__main__":
     # python -m unittest test.services.test_voice.TestVoiceService.test_azure_tts_v1
