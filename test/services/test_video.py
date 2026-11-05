@@ -634,6 +634,40 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_cached_font_loading(self):
+        vd._get_cached_font_impl.cache_clear()
+        font_file = utils.font_dir("MicrosoftYaHeiNormal.ttc")
+
+        # First call loads font and populates LRU cache
+        f1 = vd._get_cached_font(font_file, 60)
+        self.assertIsNotNone(f1)
+        info1 = vd._get_cached_font_impl.cache_info()
+        self.assertEqual(info1.hits, 0)
+        self.assertEqual(info1.misses, 1)
+
+        # Second call should be a cache hit and return the exact same instance
+        f2 = vd._get_cached_font(font_file, 60)
+        self.assertIs(f1, f2)
+        info2 = vd._get_cached_font_impl.cache_info()
+        self.assertEqual(info2.hits, 1)
+        self.assertEqual(info2.misses, 1)
+
+        # Different size loads a separate entry
+        f3 = vd._get_cached_font(font_file, 40)
+        self.assertIsNot(f1, f3)
+        info3 = vd._get_cached_font_impl.cache_info()
+        self.assertEqual(info3.hits, 1)
+        self.assertEqual(info3.misses, 2)
+
+    def test_cached_font_fallback_for_non_string(self):
+        vd._get_cached_font_impl.cache_clear()
+        font_file = utils.font_dir("MicrosoftYaHeiNormal.ttc")
+        with open(font_file, "rb") as font_stream:
+            # Passing a file stream should bypass cache and not throw unhashable type errors
+            f = vd._get_cached_font(font_stream, 30)
+            self.assertIsNotNone(f)
+            self.assertEqual(vd._get_cached_font_impl.cache_info().currsize, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
