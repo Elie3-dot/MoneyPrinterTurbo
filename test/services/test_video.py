@@ -634,6 +634,22 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_get_cached_font_caches_instances(self):
+        """
+        验证 `_get_cached_font` 会缓存相同路径和字号的 ImageFont 实例，
+        避免视频生成时对同一字体频繁进行磁盘 I/O 和解析。
+        """
+        font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
+        if not os.path.exists(font_path):
+            self.skipTest(f"font file not found: {font_path}")
+
+        font_1 = vd._get_cached_font(font_path, 40)
+        font_2 = vd._get_cached_font(font_path, 40)
+        font_3 = vd._get_cached_font(font_path, 48)
+
+        self.assertIs(font_1, font_2)
+        self.assertIsNot(font_1, font_3)
+
 
 if __name__ == "__main__":
     unittest.main()
