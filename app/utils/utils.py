@@ -65,8 +65,11 @@ def get_uuid(remove_hyphen: bool = False):
     return u
 
 
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+
 def root_dir():
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    return _ROOT_DIR
 
 
 def storage_dir(sub_dir: str = "", create: bool = False):
@@ -194,52 +197,51 @@ def text_to_srt(idx: int, msg: str, start_time: float, end_time: float) -> str:
     return srt
 
 
+# Pre-computed set of punctuation characters for O(1) membership lookups.
+# const.PUNCTUATIONS contains single characters as well as multi-character "..."
+# Joining them into a set extracts all distinct punctuation characters.
+_PUNCTUATION_SET = set("".join(const.PUNCTUATIONS))
+
+
 def str_contains_punctuation(word):
-    for p in const.PUNCTUATIONS:
-        if p in word:
-            return True
-    return False
+    # Performance optimization: use set intersection (isdisjoint) instead of O(P * N) linear scan
+    return not _PUNCTUATION_SET.isdisjoint(word)
 
 
 def split_string_by_punctuations(s):
+    # Performance optimization:
+    # 1. Use O(1) set lookup (_PUNCTUATION_SET) instead of linear scan over const.PUNCTUATIONS
+    # 2. Accumulate characters in a list instead of repeated string concatenation to reduce allocations
+    # 3. Direct indexing for previous/next character checks without redundant slicing
     result = []
-    txt = ""
+    txt = []
+    length = len(s)
 
-    previous_char = ""
-    next_char = ""
-    for i in range(len(s)):
-        char = s[i]
+    for i, char in enumerate(s):
         if char == "\n":
-            result.append(txt.strip())
-            txt = ""
+            seg = "".join(txt).strip()
+            if seg:
+                result.append(seg)
+            txt.clear()
             continue
 
-        if i > 0:
-            previous_char = s[i - 1]
-        if i < len(s) - 1:
-            next_char = s[i + 1]
-
-        if char == "." and previous_char.isdigit() and next_char.isdigit():
-            # # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5" should not be treated as a line break marker
-            txt += char
+        if (char == "." or char == ",") and 0 < i < length - 1 and s[i - 1].isdigit() and s[i + 1].isdigit():
+            # In the case of "withdraw 10,000, charged at 2.5% fee", the dot in "2.5"
+            # and comma in "1,000" should not be treated as a line break marker
+            txt.append(char)
             continue
 
-        if char == "," and previous_char.isdigit() and next_char.isdigit():
-            # 英文数字里的千分位逗号不是断句符，例如 "1,000 years"。
-            # Edge TTS 的 word boundary 通常会把这种数字整体作为连续内容返回；
-            # 如果这里拆成 "1" 和 "000 years"，后续字幕聚合会无法匹配脚本原文，
-            # 进而错误回退到 Whisper。
-            txt += char
-            continue
-
-        if char not in const.PUNCTUATIONS:
-            txt += char
+        if char not in _PUNCTUATION_SET:
+            txt.append(char)
         else:
-            result.append(txt.strip())
-            txt = ""
-    result.append(txt.strip())
-    # filter empty string
-    result = list(filter(None, result))
+            seg = "".join(txt).strip()
+            if seg:
+                result.append(seg)
+            txt.clear()
+
+    seg = "".join(txt).strip()
+    if seg:
+        result.append(seg)
     return result
 
 
